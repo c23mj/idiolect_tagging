@@ -2,6 +2,8 @@ import bz2
 import io
 import lzma
 from glob import glob
+import nltk
+nltk.download('punkt')
 from nltk.tokenize import word_tokenize
 import zstandard as zstd
 
