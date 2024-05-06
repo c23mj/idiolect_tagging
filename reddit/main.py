@@ -14,6 +14,7 @@ if __name__ == "__main__":
     all_files = get_all_raw_files()
 
     for file_path in all_files:
+        print(f"starting test for file path: {file_path}")
         author_subreddit_counts = {}
         file_name = os.path.basename(file_path)
         file_name_without_ext = os.path.splitext(file_name)[0]  # Remove file extension
@@ -52,3 +53,4 @@ if __name__ == "__main__":
             for author, subreddit_count in author_subreddit_counts.items():
                 for subreddit, count in subreddit_count.items():
                     writer.writerow([author, subreddit, count])
+        break
