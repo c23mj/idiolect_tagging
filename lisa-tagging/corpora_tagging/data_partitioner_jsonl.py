@@ -1,4 +1,4 @@
-import jsonlines
+import json
 import shutil
 import logging
 import os
@@ -19,8 +19,9 @@ def partition_file(input_file, output_directory, chunks=100):
     curr_lines = []
     count, chunk = 0, 1
 
-    with jsonlines.open(input_file) as reader:
-        for obj in reader:
+    with open(input_file, 'r', encoding='utf-8') as reader:
+        for line in reader:
+            obj = json.loads(line.strip())
             curr_lines.append(obj)
             count += 1
             if count >= chunk_size:
@@ -39,8 +40,9 @@ def save_partition(json_lines, output_directory, index):
     out = os.path.join(output_directory, f"partition-{index}.jsonl")
     logging.info(f"Saving {out}")
 
-    with jsonlines.open(out, mode='w') as writer:
-        writer.write_all(json_lines)
+    with open(out, 'w', encoding='utf-8') as writer:
+        for obj in json_lines:
+            writer.write(json.dumps(obj) + '\n')
 
 
 def count_lines(input_file):
@@ -53,13 +55,13 @@ def join_tagged_files(input_directory, output_file):
     """Join all tagged files from the input directory into one output file."""
     tagged_files = glob(os.path.join(input_directory, "*.jsonl"))
 
-    print(len(tagged_files))
+    logging.info(f"Found {len(tagged_files)} files to merge")
 
-    with jsonlines.open(output_file, mode='w') as writer:
+    with open(output_file, 'w', encoding='utf-8') as writer:
         for tagged_file in tqdm(tagged_files, desc="Merging tagged files"):
-            with jsonlines.open(tagged_file) as reader:
-                for obj in reader:
-                    writer.write(obj)
+            with open(tagged_file, 'r', encoding='utf-8') as reader:
+                for line in reader:
+                    writer.write(line)
 
 
 def delete_partitioned_files(dir_path):
