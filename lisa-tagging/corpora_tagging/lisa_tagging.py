@@ -1,9 +1,14 @@
 import os
 from glob import glob
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
 import json
 import torch
+import time
 
+
+# Global variables for tokenizer and model
+tokenizer = None
+model = None
 
 def initialize_worker():
     global tokenizer, model
@@ -14,23 +19,29 @@ def initialize_worker():
         "/shared/3/projects/hiatus/idiolect/models/stylegenome_lisa_sfam/lisa_checkpoint",
         num_labels=768, problem_type="regression"
     )
+    model.eval()
+    print(f"Worker {os.getpid()} initialized")
 
 def tag_lisa(obj):
     global tokenizer, model
+    start_time = time.time()
     try:
         tokenized = tokenizer(
             [obj['fullText']],
             truncation=True, max_length=512, padding=True, return_tensors="pt"
-        )        
+        )
         with torch.no_grad():
             prediction = model.forward(**tokenized)[0][0].cpu().float()
-  
         vector = torch.clamp(prediction, min=0.0, max=1.0).numpy().tolist()
         if 'encodings' in obj:
             del obj['encodings']
         obj['lisa_vector'] = vector
+        print(f"Tagged document {obj['documentID']}")
     except Exception as e:
         print(f"Error processing object {obj['documentID']}: {e}")
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Time taken to tag document {obj['documentID']}: {elapsed_time:.4f} seconds")
     return obj
 
 def tag_partition(input_file, output_file):
@@ -42,12 +53,13 @@ def tag_partition(input_file, output_file):
                 obj = json.loads(line.strip())
                 tagged_object = tag_lisa(obj)
                 tagged_objects.append(tagged_object)
-                
+
+                # Process in batches of 50 to reduce overhead
                 if len(tagged_objects) % 50 == 0:
-                    print(f"Appending chunk to {output_file}")
                     append_chunk(output_file, tagged_objects)
                     tagged_objects = []
 
+        # Write any remaining objects that didn't make up a full batch
         if tagged_objects:
             append_chunk(output_file, tagged_objects)
     except Exception as e:
@@ -75,8 +87,8 @@ def append_chunk(output_file, tagged_objects):
 def tag_partitions(input_directory, output_directory, num_workers):
     process_args = build_process_args(input_directory, output_directory)
 
-    if num_workers > cpu_count():
-        num_workers = cpu_count()
+    # Ensure we never use more workers than specified
+    num_workers = min(num_workers, len(process_args))
 
     print(f"Using {num_workers} workers for tagging")
     with Pool(num_workers, initializer=initialize_worker) as pool:
@@ -84,4 +96,4 @@ def tag_partitions(input_directory, output_directory, num_workers):
     print("Finished multiprocessing pool")
 
 # Example usage:
-# tag_partitions('/path/to/input', '/path/to/output', 4)
+# tag_partitions('/path/to/input', '/path/to/output', 2)
