@@ -3,7 +3,7 @@ from glob import glob
 from multiprocessing import Pool, cpu_count
 import json
 import torch
-
+# from time import time
 
 def initialize_worker():
     global tokenizer, model
@@ -17,18 +17,18 @@ def initialize_worker():
 
 def tag_lisa(obj):
     global tokenizer, model
+#     start_time = time()  # Start timing
     try:
         tokenized = tokenizer(
             [obj['fullText']],
             truncation=True, max_length=512, padding=True, return_tensors="pt"
-        )        
+        )
         with torch.no_grad():
             prediction = model.forward(**tokenized)[0][0].cpu().float()
-  
-        vector = torch.clamp(prediction, min=0.0, max=1.0).numpy().tolist()
-        if 'encodings' in obj:
-            del obj['encodings']
+
+        vector = torch.clamp(prediction, min=0.0, max=1.0).tolist()
         obj['lisa_vector'] = vector
+#         print('tagged in', time() - start_time, 'seconds')  # Print time taken
     except Exception as e:
         print(f"Error processing object {obj['documentID']}: {e}")
     return obj
@@ -42,9 +42,8 @@ def tag_partition(input_file, output_file):
                 obj = json.loads(line.strip())
                 tagged_object = tag_lisa(obj)
                 tagged_objects.append(tagged_object)
-                
-                if len(tagged_objects) % 50 == 0:
-                    print(f"Appending chunk to {output_file}")
+
+                if len(tagged_objects) % 50000 == 0:
                     append_chunk(output_file, tagged_objects)
                     tagged_objects = []
 
@@ -82,6 +81,3 @@ def tag_partitions(input_directory, output_directory, num_workers):
     with Pool(num_workers, initializer=initialize_worker) as pool:
         pool.starmap(tag_partition, process_args)
     print("Finished multiprocessing pool")
-
-# Example usage:
-# tag_partitions('/path/to/input', '/path/to/output', 4)
